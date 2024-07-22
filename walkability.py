@@ -1,106 +1,16 @@
-import googlemaps
-import os
-import requests
-import json
-from datetime import datetime
-from openai import OpenAI
-
 import geopandas as gpd
-from shapely.geometry import Point, LineString, Polygon
+import googlemaps
 import itertools
+import requests
+import base64
+import os
 
-
-#_______________________________________________
-key = 'GOOGLE MAPS API KEY'
-OPENAI_API_KEY = 'OPEN AI API KEY'
-
-# Paths to your shapefiles
-road_shapefile_path = 'PATH TO ROAD NETWORK FILES'
-polygon_shapefile_path = 'PATH TO ONE POLYGON .SHP FILES'
-#_______________________________________________
-
-gmaps = googlemaps.Client(key=key) 
-count = 0
-
-def get_streetview_images(location, api_key, output_folder):
-    base_url = "https://maps.googleapis.com/maps/api/streetview"
-    headings = [0, 90, 180, 270]
-    params = {
-        'location': location,
-        'size': '1080x1080',
-        'pitch': '0',  # Up or down angle of the camera
-        'fov': '90',  # Field of view
-        'source': 'default',  # Source of imagery
-        'key': api_key
-    }
-    
-    for heading in headings:
-        params['heading'] = heading
-        url = f"{base_url}?location={params['location']}&size={params['size']}&heading={params['heading']}&pitch={params['pitch']}&fov={params['fov']}&source={params['source']}&key={params['key']}"
-        
-        response = requests.get(url)
-        if response.status_code == 200:
-            image_filename = os.path.join(output_folder, f"{location.replace(',', '_')}_{heading}.jpg")
-            with open(image_filename, 'wb') as file:
-                file.write(response.content)
-            print(f"Saved image: {image_filename}")
-        else:
-            print(f"Error for location {location} and heading {heading}: {response.status_code}, {response.text}")
-
-def process_locations_file(input_file, api_key, output_folder):
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-        
-    with open(input_file, 'r') as file:
-        locations = file.readlines()
-    
-    for location in locations:
-        location = location.strip()
-        get_streetview_images(location, api_key, output_folder)
-
-def describe_image(filename):
-    description = f"Description of the image {filename}: The image shows a street view. Analyze it comprehensively to identify the presence and conditions of pedestrian infrastructure, including sidewalks, crosswalks, pedestrian walk signals, ramps at curbs, and designated bike paths. Additionally, note any constructions, graffiti, road cracks, pavement conditions, road hygiene, overgrown grass around the sidewalk, and any other details that might affect walkability. Consider the following aspects: Presence and condition of pedestrian walk signals; Presence and accessibility of curb ramps; Visibility and condition of marked crosswalks; Type of land use (residential, commercial, mixed-use); Number and condition of public parks; Number and condition of public transit stops; Presence and condition of designated bike paths; Availability and condition of benches or places to sit; Installation and condition of streetlights; Maintenance status of buildings; Presence and visibility of graffiti/tagging; Presence and condition of sidewalks; Identification of poorly maintained sections of the sidewalk that pose trip hazards; Presence and condition of buffers between sidewalks and streets; Extent of overhead coverage by trees, awnings, or other structures. Your descriptive text should include all these details to facilitate a thorough micro-scale walkability analysis -- but please try to make every description concise and reasonably short!"
-
-    return description
-
-def analyze_images_with_gpt(folder):
-    descriptions = []
-
-    for filename in os.listdir(folder):
-        if filename.endswith((".jpg", ".png")):
-            description = describe_image(filename)
-            descriptions.append(description)
-
-    massive_prompt = "I will provide text descriptions of various images from Google Maps Street View. Please conduct a detailed, micro-level walkability analysis of the specified area. Pay close attention to factors such as construction sites, graffiti, road cracks, pavement conditions, cleanliness, overgrown grass near sidewalks, and other minor details that could affect the desirability of walking in the area. Additionally, consider the following standards in your analysis: Crossing: Is a pedestrian walk signal present? Is there a ramp at the curb(s)? Is there a marked crosswalk? Segment: Type of land use? How many public parks are present? How many public transit stops are present? Is there a designated bike path? Are there any benches or places to sit? Are streetlights installed? Are the buildings well maintained? Is graffiti/tagging present? Is a sidewalk present? Are there poorly maintained sections of the sidewalk that constitute major trip hazards? Is a buffer present? What percentage of the length of the sidewalk/walkway is covered by trees, awnings, or other overhead coverage? You don't need to analyze every single image individually; instead, summarize your findings in one comprehensive paragraph. Additionally, provide a walkability score out of 100, reflecting the overall pedestrian-friendliness of the area. Present the final output in the following format: Walkability Score: [numeric score] Explanations: - [Bullet point explanation 1] - [Bullet point explanation 2] - ... Please note: - If the area is pedestrian-friendly, with features like trees, minimal traffic, walkable shades, and a peaceful environment, the score should be very high (around 80-90). - A lack of trees and green spaces should result in a lower score. - Areas that do not appear to be major retail or residential zones should have a lower score. - A residential area with trees, fewer cars, and shaded walkways should have a very high score, around 90." + "\n\n".join(descriptions)
-
-    client = OpenAI(
-        api_key=OPENAI_API_KEY,
-    )
-
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-                {
-                    "role": "user",
-                    "content": massive_prompt,
-                }
-            ],
-        max_tokens=4096
-    )
-
-    response_content = response.choices[0].message.content
-
-    # Convert the response to JSON format
-    walkability_score = response_content.split("Walkability Score: ")[1].split("\n")[0]
-    explanations = response_content.split("Explanations:")[1].strip().split("\n- ")
-
-    result = {
-        "Walkability Score": int(walkability_score),
-        "Explanations": explanations
-    }
-
-    return result
-
+# OpenAI API Key (gpt-4o required due to the token limit)
+gpt_key = 'GPT API'
+# Google Maps API Key
+gmaps_key = "GOOGLE MAPS API"
+# Setting up the Google Maps
+gmaps = googlemaps.Client(key=gmaps_key)
 
 def extract_intersections_within_polygon(road_shapefile, polygon_shapefile):
     try:
@@ -158,7 +68,6 @@ def extract_intersections_within_polygon(road_shapefile, polygon_shapefile):
 
         # Extract the coordinates of the intersections
         coordinates = [(point.y, point.x) for point in intersections]  # Latitude and Longitude
-        count = 4 * len(coordinates)
         print(f"Number of intersections found: {len(coordinates)}")
 
         return coordinates
@@ -177,6 +86,100 @@ def save_intersections_to_txt(coordinates, output_file):
     except Exception as e:
         print(f"An error occurred while saving to file: {e}")
 
+def process_locations_file(input_file, api_key, output_folder):
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+        
+    with open(input_file, 'r') as file:
+        locations = file.readlines()
+    
+    for location in locations:
+        location = location.strip()
+        get_streetview_images(location, api_key, output_folder)
+
+# Retrieving the streetview images
+def get_streetview_images(location, api_key, output_folder):
+    base_url = "https://maps.googleapis.com/maps/api/streetview"
+    headings = [0, 90, 180, 270]
+    params = {
+        'location': location,
+        'size': '450x450',
+        'pitch': '0',  # Up or down angle of the camera
+        'fov': '90',  # Field of view
+        'source': 'default',
+        'key': api_key
+    }
+    
+    for heading in headings:
+        params['heading'] = heading
+        url = f"{base_url}?location={params['location']}&size={params['size']}&heading={params['heading']}&pitch={params['pitch']}&fov={params['fov']}&source={params['source']}&key={params['key']}"
+        
+        response = requests.get(url)
+        if response.status_code == 200:
+            image_filename = os.path.join(output_folder, f"{location.replace(',', '_')}_{heading}.jpg")
+            with open(image_filename, 'wb') as file:
+                file.write(response.content)
+            print(f"Saved image: {image_filename}")
+            if len(image_paths) < 250:
+                image_paths.append(image_filename)
+        else:
+            print(f"Error for location {location} and heading {heading}: {response.status_code}, {response.text}")
+
+# Function to encode the image
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
+
+def analyze_images_with_gpt():
+    encoded_images = [encode_image(image_path) for image_path in image_paths]
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {gpt_key}"
+    }
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Here is a streetview photo of a region, analyse its walkability score out of 100 entirely based on the pedestrian experience while walking around the region. Another thing you should consider is accessibility around the region. There is a Canadian ADA Law for accessibility for disabled individuals (The Accessible Canada Act); use this as your references and reflect this aspect to your overall walkability score. At the very end, just provide the final score out of 100."
+                }
+            ]
+        }
+    ]
+
+    for encoded_image in encoded_images:
+        messages[0]['content'].append({
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:image/jpeg;base64,{encoded_image}"
+            }
+        })
+
+    payload = {
+        "model": "gpt-4o",
+        "messages": messages,
+        "max_tokens": 4096
+    }
+
+    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+    res_json = response.json()
+    
+    print(res_json)
+
+    # Extract and print the content
+    if 'choices' in res_json:
+        for choice in res_json['choices']:
+            if 'message' in choice and 'content' in choice['message']:
+                print(choice['message']['content'])
+    else:
+        print("No content available in the response.")
+
+# Paths to your shapefiles
+road_shapefile_path = '/Users/jangjaehyeong0421/VSC/Canurb/Google/mainstreet_base/msn_base.shp'
+polygon_shapefile_path = '/Users/jangjaehyeong0421/VSC/Canurb/Google/bia/DowntownYonge/DTY.shp'
 # Output file path
 output_file_path = 'intersections.txt'
 
@@ -190,14 +193,8 @@ if intersections:
 else:
     print("No intersections found within the polygon.")
 
-api_key = key
+image_paths = []
 output_folder = 'streetview_images'
 
-process_locations_file(output_file_path, api_key, output_folder)
-walkability_results = analyze_images_with_gpt(output_folder)
-
-# Save the JSON result to a file named "report.json"
-with open('report.json', 'w') as json_file:
-    json.dump(walkability_results, json_file, indent=4)
-
-print("Walkability results saved to report.json")
+process_locations_file(output_file_path, gmaps_key, output_folder)
+analyze_images_with_gpt()
