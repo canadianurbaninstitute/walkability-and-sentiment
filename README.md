@@ -4,7 +4,9 @@
 ## Introduction
 This project aims to enhance urban planning and pedestrian experiences through Meso-Scaled/Micro-Scaled Walkability Analysis and BIA-Centered Sentiment Analysis. It combines conventional geographic analysis with AI-driven insights to provide a comprehensive understanding of urban walkability and public sentiment.
 
-Download required dataset: 
+    - The Google Colab environment is highly recommended for sentiment analysis due to classifier training
+
+Download the required dataset: 
 [https://drive.google.com/file/d/1BZoXRc6qyod6L7SVUrPF3HZ9Vu_YhxNh/view?usp=sharing]
 
 ## Table of Contents
@@ -62,13 +64,10 @@ The conventional Walk Score method often fails to account for pedestrian experie
 - **process_locations_file(input_file, api_key, output_folder)**
     - Reads a list of locations from a file and downloads Street View images for each location.
 
-- **describe_image(filename)**
-    - Provides a detailed description of the given image, focusing on factors that affect walkability.
-
 - **analyze_images_with_gpt(folder)**
     - Analyzes images using GPT-4 to generate a comprehensive walkability score and explanations.
 
-- **extract_intersections_within_polygon(road_shapefile, polygon_shapefile)*
+- **extract_intersections_within_polygon(road_shapefile, polygon_shapefile)**
     - Extracts intersections within a polygon from road and polygon shapefiles.
 
 - **save_intersections_to_txt(coordinates, output_file)**
@@ -86,38 +85,31 @@ Collecting user feedback on urban spaces is essential for efficient urban planni
 
 #### Sample Output
 ```
-Five Number Summary of Sentiment Scores:
-Min: 18
-Q1: 74.0
-Median: 89.0
-Q3: 95.0
-Max: 99
+Sentiment Score: 0.45982349834
 ```
 
 ### Technical Breakdown
-- **AI Processing Model**: Latest GPT-4o (up to May 13, 2024)
+- **AI Processing Model**: Tailored RandomForestClassifier Model
 - **Image Retrieving**: Google Maps API Nearby Search: $17 / 1k Requests
-- **Prompt Engineering**: Tailored prompts for detailed analysis
+- **Prompt Engineering**: No prompt engineering required
 
 
-###Function Descriptions
+### Function Descriptions
 - **extract_intersections_within_polygon(road_shapefile, polygon_shapefile)**
     - Extracts intersections within a polygon from road and polygon shapefiles.
 
 - **save_intersections_to_txt(coordinates, output_file)**
     - Saves the coordinates of intersections to a text file.
 
-- **perform_nearby_search(coordinates, radius, polygon, place_ids_set)**
-    - Performs a nearby search for places around the given coordinates and saves the unique place IDs.
+- **perform_nearby_search(coordinates, radius, polygon, place_ids_set, reviews_list)**
+    - Performs a nearby search for places around the given coordinates and saves the unique place IDs and reviews.
 
 - **process_review(reviews)**
-    - Processes reviews using GPT-4 to generate a sentiment analysis score.
+    - Processes reviews using a sentiment analysis model to generate a sentiment score.
 
 - **perform_sentiment_analysis_on_place_ids(place_ids)**
     - Performs sentiment analysis on the unique place IDs retrieved from Google Maps.
 
-- **calculate_five_number_summary(scores)**
-    - Calculates the five-number summary of sentiment scores.
 
 ## Potential Use Cases
 - **Construction Mitigation**: Provides user-centric information for mitigating daily experience impacts.
